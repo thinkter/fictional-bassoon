@@ -26,7 +26,7 @@ export default function MeetingRoom({ userName, roomName }: MeetingRoomProps) {
   const [device, setDevice] = useState<Device | null>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<{
-    [key: number]: RemoteStream;
+    [key: string]: RemoteStream;
   }>({});
   const [isJoined, setIsJoined] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -53,18 +53,16 @@ export default function MeetingRoom({ userName, roomName }: MeetingRoomProps) {
 
     socket.on("updateActiveSpeakers", (newListOfActives: string[]) => {
       console.log("updateActiveSpeakers:", newListOfActives);
-      const newStreams: { [key: number]: RemoteStream } = {};
-      let slot = 0;
+      const newStreams: { [key: string]: RemoteStream } = {};
 
       newListOfActives.forEach((aid) => {
         if (aid !== audioProducerRef.current?.id) {
           const consumerData = consumersRef.current[aid];
           if (consumerData) {
-            newStreams[slot] = {
+            newStreams[aid] = {
               stream: consumerData.combinedStream,
               userName: consumerData.userName,
             };
-            slot++;
           }
         }
       });
@@ -82,10 +80,10 @@ export default function MeetingRoom({ userName, roomName }: MeetingRoomProps) {
         socket,
         currentDevice,
         consumersRef.current,
-        (slot, stream, name) => {
+        (slot, stream, name, audioPid) => {
           setRemoteStreams((prev) => ({
             ...prev,
-            [slot]: { stream, userName: name },
+            [audioPid]: { stream, userName: name },
           }));
         }
       );
@@ -118,10 +116,10 @@ export default function MeetingRoom({ userName, roomName }: MeetingRoomProps) {
       socket,
       newDevice,
       consumersRef.current,
-      (slot, stream, name) => {
+      (slot, stream, name, audioPid) => {
         setRemoteStreams((prev) => ({
           ...prev,
-          [slot]: { stream, userName: name },
+          [audioPid]: { stream, userName: name },
         }));
       }
     );
@@ -174,100 +172,105 @@ export default function MeetingRoom({ userName, roomName }: MeetingRoomProps) {
     }
   };
 
+  const getParticipants = () => {
+    const participants = [];
+    if (localStream) {
+      participants.push({
+        stream: localStream,
+        userName: `${userName} (You)`,
+        isLocal: true,
+        key: "local",
+      });
+    }
+    Object.entries(remoteStreams).forEach(([key, remote]) => {
+      participants.push({
+        stream: remote.stream,
+        userName: remote.userName,
+        isLocal: false,
+        key: `remote-${key}`,
+      });
+    });
+    return participants;
+  };
+
+  const participants = getParticipants();
+
+  // Dynamic grid column calculation could be added here,
+  // but CSS grid with auto-fit is a good start for "simple implementation".
+
   return (
-    <div className="flex flex-col h-screen bg-gray-900 text-white p-4">
+    <div className="flex flex-col h-screen bg-gray-900 text-white">
       {/* Header */}
-      <div className="flex justify-between items-center mb-4 px-2">
+      <div className="flex justify-between items-center p-4 bg-gray-800 shadow-md z-10">
         <h1 className="text-xl font-bold">
-          Room: <span className="text-indigo-400">{roomName}</span> | User:{" "}
-          <span className="text-green-400">{userName}</span>
+          Room: <span className="text-indigo-400">{roomName}</span>
         </h1>
         <div className="flex gap-2">
+          {/* Controls Control */}
           {!isJoined && (
             <button
               onClick={joinRoom}
-              className="px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              className="px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm"
             >
-              Join Room
+              Join
             </button>
           )}
           <button
             onClick={enableFeed}
             disabled={!isJoined || feedEnabled}
-            className="px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-2 bg-green-600 rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed text-sm"
           >
-            Feed On
+            Camera On
           </button>
           <button
             onClick={sendFeed}
             disabled={!feedEnabled || feedSent}
-            className="px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed text-sm"
           >
-            Send Feed
+            Join Stream
           </button>
           <button
             onClick={toggleMute}
             disabled={!feedSent}
-            className={`px-4 py-2 rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed ${
+            className={`px-3 py-2 rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed text-sm ${
               isMuted
                 ? "bg-red-600 hover:bg-red-700"
-                : "bg-green-600 hover:bg-green-700"
+                : "bg-gray-600 hover:bg-gray-700"
             }`}
           >
-            {isMuted ? "Audio Muted" : "Audio On"}
+            {isMuted ? "Unmute" : "Mute"}
           </button>
           <button
             disabled
-            className="px-4 py-2 bg-red-600 rounded-lg opacity-50 cursor-not-allowed font-medium"
+            className="px-3 py-2 bg-red-600 rounded-lg opacity-50 cursor-not-allowed font-medium text-sm"
           >
-            Hangup
+            Leave
           </button>
         </div>
       </div>
 
-      {/* Remote Videos - Small thumbnails at top */}
-      <div className="flex gap-2 mb-4 justify-center">
-        {[1, 2, 3, 4].map((slot) => {
-          const remote = remoteStreams[slot];
-          return (
-            <div key={slot} className="w-[18%] h-20">
-              {remote ? (
-                <VideoFeed stream={remote.stream} userName={remote.userName} />
-              ) : (
-                <div className="w-full h-full bg-gray-800 rounded-lg border border-gray-600 flex items-center justify-center text-gray-500 text-xs">
-                  Empty
-                </div>
-              )}
+      {/* Main Grid Area */}
+      <div className="flex-1 p-4 overflow-y-auto">
+        {participants.length === 0 ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center text-gray-400">
+              <p className="text-xl mb-2">No one is here yet.</p>
+              {!isJoined && <p>Join the room to start!</p>}
             </div>
-          );
-        })}
-      </div>
-
-      {/* Main Speaker Video */}
-      <div className="flex-1 flex justify-center mb-4">
-        <div className="w-[80%] max-w-4xl">
-          {remoteStreams[0] ? (
-            <VideoFeed
-              stream={remoteStreams[0].stream}
-              userName={remoteStreams[0].userName}
-            />
-          ) : (
-            <div className="w-full aspect-video bg-gray-800 rounded-lg border border-gray-600 flex items-center justify-center text-gray-500">
-              {isJoined
-                ? "Waiting for other participants..."
-                : "Join the room to start"}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Local Video - Bottom left */}
-      <div className="absolute bottom-6 left-6 w-40">
-        {localStream ? (
-          <VideoFeed stream={localStream} userName={userName} isLocal />
+          </div>
         ) : (
-          <div className="w-full h-24 bg-gray-800 rounded-lg border border-gray-600 flex items-center justify-center text-gray-500 text-xs">
-            Camera Off
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 auto-rows-fr h-full max-h-full">
+            {participants.map((p) => (
+              <div key={p.key} className="relative w-full h-full min-h-[200px]">
+                <div className="w-full h-full">
+                  <VideoFeed
+                    stream={p.stream}
+                    userName={p.userName}
+                    isLocal={p.isLocal}
+                  />
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>

@@ -53,7 +53,7 @@ export default function VideoFeed({
 
   return (
     <div
-      className={`relative bg-gray-800 rounded-lg overflow-hidden aspect-video ${
+      className={`relative w-full h-full bg-gray-800 rounded-lg overflow-hidden ${
         isLocal ? "border-2 border-green-500" : "border border-gray-600"
       }`}
     >

@@ -22,7 +22,12 @@ const requestTransportToConsume = (
   socket: Socket,
   device: Device,
   consumers: Record<string, ConsumerData>,
-  onNewConsumer: (slot: number, stream: MediaStream, userName: string) => void
+  onNewConsumer: (
+    slot: number,
+    stream: MediaStream,
+    userName: string,
+    audioPid: string
+  ) => void
 ) => {
   consumeData.audioPidsToCreate.forEach(async (audioPid: string, i: number) => {
     const videoPid = consumeData.videoPidsToCreate[i];
@@ -62,7 +67,12 @@ const requestTransportToConsume = (
     );
 
     // Update state via callback
-    onNewConsumer(i, combinedStream, consumeData.associatedUserNames[i]);
+    onNewConsumer(
+      i,
+      combinedStream,
+      consumeData.associatedUserNames[i],
+      audioPid
+    );
 
     // Store in consumers object (keyed by audio PID)
     consumers[audioPid] = {
